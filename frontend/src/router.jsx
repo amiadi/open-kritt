@@ -18,6 +18,8 @@ import Steps from './pages/Steps.jsx';
 import AiGeneration from './pages/AiGeneration.jsx';
 import Accounts from './pages/Accounts.jsx';
 import Settings from './pages/Settings.jsx';
+import Assessments from './pages/Assessments.jsx';
+import AssessmentDetail from './pages/AssessmentDetail.jsx';
 
 // Data router (createBrowserRouter) so pages can use useBlocker to guard
 // against navigating away from unsaved work.
@@ -36,6 +38,8 @@ export const router = createBrowserRouter(
         { path: 'scans/new', element: <CreateScan /> },
         { path: 'scans/:id', element: <ScanDetail /> },
         { path: 'scans/:scanId/vulnerabilities/:vulnId', element: <VulnerabilityPage /> },
+        { path: 'assessments', element: <Assessments /> },
+        { path: 'assessments/:id', element: <AssessmentDetail /> },
         { path: 'settings', element: <Settings /> },
         { path: 'accounts', element: <Accounts /> },
         { path: 'post-scripts', element: <PostScripts /> },

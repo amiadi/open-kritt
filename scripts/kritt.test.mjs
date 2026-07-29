@@ -643,3 +643,20 @@ test('help is available for subcommands and unknown commands fail clearly', asyn
   assert.equal(await runCli(['unknown'], { ...project, io: unknownIo }), 1);
   assert.match(unknownIo.error.text, /Unknown command/);
 });
+
+test('bundle help is available through the repository-local CLI', async (t) => {
+  const project = await createProject(t);
+  const io = testIo();
+
+  assert.equal(await runCli(['bundle', '--help'], { ...project, io }), 0);
+  assert.match(io.output.text, /offline image bundles/);
+  assert.match(io.output.text, /--require-signature/);
+});
+
+test('air-gap verification help is available through the repository-local CLI', async (t) => {
+  const project = await createProject(t);
+  const io = testIo();
+
+  assert.equal(await runCli(['airgap', '--help'], { ...project, io }), 0);
+  assert.match(io.output.text, /internal airgap-internal network/);
+});

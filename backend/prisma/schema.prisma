@@ -94,6 +94,205 @@ model ModelCatalog {
   @@schema("public")
 }
 
+/// Deployment-wide connectivity policy. Air-gapped deployments must not expose
+/// an egress network or cloud-only model configuration.
+model DeploymentProfile {
+  id        String   @id
+  mode      String   @default("online")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("deployment_profiles")
+  @@schema("public")
+}
+
+/// An authorized security assessment engagement.
+model Engagement {
+  id             BigInt   @id @default(autoincrement())
+  name           String
+  description    String?
+  owner          String
+  classification String   @default("confidential")
+  status         String   @default("draft")
+  insertedAt     DateTime @default(now()) @map("inserted_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("engagements")
+  @@schema("public")
+}
+
+/// Explicit included and excluded target identifiers for an engagement.
+model TargetScope {
+  id           BigInt   @id @default(autoincrement())
+  engagementId BigInt   @map("engagement_id")
+  name         String
+  targets      Json     @default("[]")
+  exclusions   Json     @default("[]")
+  insertedAt   DateTime @default(now()) @map("inserted_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([engagementId], map: "target_scopes_engagement_id_idx")
+  @@map("target_scopes")
+  @@schema("public")
+}
+
+/// Evidence that an engagement is authorized for a bounded time window.
+model AuthorizationRecord {
+  id                     BigInt   @id @default(autoincrement())
+  engagementId           BigInt   @map("engagement_id")
+  approvedBy             String   @map("approved_by")
+  authorizationReference String   @map("authorization_reference")
+  validFrom              DateTime @map("valid_from") @db.Timestamptz(6)
+  validUntil             DateTime @map("valid_until") @db.Timestamptz(6)
+  status                 String   @default("approved")
+  evidenceReference      String?  @map("evidence_reference")
+  insertedAt             DateTime @default(now()) @map("inserted_at") @db.Timestamptz(6)
+  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([engagementId], map: "authorization_records_engagement_id_idx")
+  @@map("authorization_records")
+  @@schema("public")
+}
+
+/// A frozen, policy-bound assessment request. New runs are draft-only until
+/// the engine gains the corresponding bounded execution adapters.
+model AssessmentRun {
+  id                    BigInt   @id @default(autoincrement())
+  engagementId          BigInt   @map("engagement_id")
+  targetScopeId         BigInt   @map("target_scope_id")
+  authorizationRecordId BigInt   @map("authorization_record_id")
+  capability            String
+  executionMode         String   @map("execution_mode")
+  status                String   @default("draft")
+  deploymentMode        String   @map("deployment_mode")
+  policySnapshot        Json     @default("{}") @map("policy_snapshot")
+  scopeSnapshot         Json     @map("scope_snapshot")
+  authorizationSnapshot Json     @map("authorization_snapshot")
+  insertedAt            DateTime @default(now()) @map("inserted_at") @db.Timestamptz(6)
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([engagementId], map: "assessment_runs_engagement_id_idx")
+  @@index([status, insertedAt(sort: Desc)], map: "assessment_runs_status_inserted_at_idx")
+  @@map("assessment_runs")
+  @@schema("public")
+}
+
+model AssessmentAction {
+  id                BigInt   @id @default(autoincrement())
+  assessmentRunId   BigInt   @map("assessment_run_id")
+  actionType        String   @map("action_type")
+  riskClassification String  @map("risk_classification")
+  status            String   @default("planned")
+  summary           String
+  details           Json     @default("{}")
+  insertedAt        DateTime @default(now()) @map("inserted_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([assessmentRunId], map: "assessment_actions_run_id_idx")
+  @@map("assessment_actions")
+  @@schema("public")
+}
+
+model AssessmentAuditEvent {
+  id              BigInt   @id @default(autoincrement())
+  assessmentRunId BigInt?  @map("assessment_run_id")
+  eventType       String   @map("event_type")
+  actor           String
+  details         Json     @default("{}")
+  insertedAt      DateTime @default(now()) @map("inserted_at") @db.Timestamptz(6)
+
+  @@index([assessmentRunId, insertedAt(sort: Desc)], map: "assessment_audit_events_run_id_inserted_at_idx")
+  @@map("assessment_audit_events")
+  @@schema("public")
+}
+
+/// Frozen input to local PDF, DOCX, XLSX, and CSV renderers. The first snapshot
+/// for a run is retained as the audit-grade reporting source of truth.
+model AssessmentReportSnapshot {
+  id              BigInt   @id @default(autoincrement())
+  assessmentRunId BigInt   @unique @map("assessment_run_id")
+  schemaVersion   Int      @default(1) @map("schema_version")
+  snapshot        Json
+  insertedAt      DateTime @default(now()) @map("inserted_at") @db.Timestamptz(6)
+
+  @@index([assessmentRunId], map: "assessment_report_snapshots_run_id_idx")
+  @@map("assessment_report_snapshots")
+  @@schema("public")
+}
+
+/// Durable, audit-only lifecycle record for a reviewed assessment execution.
+/// No job may cause target operations until a separately reviewed adapter exists.
+model AssessmentExecutionJob {
+  id                    BigInt   @id @default(autoincrement())
+  assessmentRunId       BigInt   @map("assessment_run_id")
+  status                String   @default("queued")
+  cancellationRequested Boolean  @default(false) @map("cancellation_requested")
+  operationsAccounted   Int      @default(0) @map("operations_accounted")
+  policyReceipt         Json?    @map("policy_receipt")
+  insertedAt            DateTime @default(now()) @map("inserted_at") @db.Timestamptz(6)
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([assessmentRunId, insertedAt(sort: Desc)], map: "assessment_execution_jobs_run_id_idx")
+  @@map("assessment_execution_jobs")
+  @@schema("public")
+}
+
+model AssessmentExecutionEvent {
+  id                     BigInt   @id @default(autoincrement())
+  assessmentExecutionJobId BigInt @map("assessment_execution_job_id")
+  eventType              String   @map("event_type")
+  actor                  String
+  details                Json     @default("{}")
+  insertedAt             DateTime @default(now()) @map("inserted_at") @db.Timestamptz(6)
+
+  @@index([assessmentExecutionJobId, insertedAt(sort: Desc)], map: "assessment_execution_events_job_id_idx")
+  @@map("assessment_execution_events")
+  @@schema("public")
+}
+
+model AssessmentReportArtifact {
+  id              BigInt   @id @default(autoincrement())
+  assessmentRunId BigInt   @map("assessment_run_id")
+  format          String
+  digest          String
+  byteLength      Int      @map("byte_length")
+  createdBy       String   @default("system") @map("created_by")
+  insertedAt      DateTime @default(now()) @map("inserted_at") @db.Timestamptz(6)
+
+  @@unique([assessmentRunId, format, digest])
+  @@index([assessmentRunId, insertedAt(sort: Desc)], map: "assessment_report_artifacts_run_id_idx")
+  @@map("assessment_report_artifacts")
+  @@schema("public")
+}
+
+/// Verified metadata for a transported Docker image bundle. Archives and keys
+/// remain on operator-controlled storage; this is an audit inventory only.
+model OfflineBundle {
+  manifestDigest     String                @id @map("manifest_digest")
+  schemaVersion      Int                   @map("schema_version")
+  createdAt          DateTime              @map("created_at") @db.Timestamptz(6)
+  images             Json
+  artifacts          Json
+  signatureAlgorithm String?               @map("signature_algorithm")
+  insertedAt         DateTime              @default(now()) @map("inserted_at") @db.Timestamptz(6)
+  imports            OfflineBundleImport[]
+
+  @@map("offline_bundles")
+  @@schema("public")
+}
+
+model OfflineBundleImport {
+  id             BigInt        @id @default(autoincrement())
+  manifestDigest String        @map("manifest_digest")
+  actor          String
+  verificationMode String      @map("verification_mode")
+  importedAt     DateTime      @default(now()) @map("imported_at") @db.Timestamptz(6)
+  bundle         OfflineBundle @relation(fields: [manifestDigest], references: [manifestDigest], onDelete: Restrict)
+
+  @@index([manifestDigest, importedAt(sort: Desc)], map: "offline_bundle_imports_manifest_digest_imported_at_idx")
+  @@map("offline_bundle_imports")
+  @@schema("public")
+}
+
 /// A queued natural-language request to generate a workflow or post-script draft.
 /// The engine owns execution fields; a completed result remains a draft until the
 /// user explicitly persists it through the corresponding resource API.

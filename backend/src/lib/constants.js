@@ -65,6 +65,11 @@ export const SCAN_STATUSES = [
   'failed',
 ];
 
+export const DEPLOYMENT_MODES = ['online', 'airgap'];
+export const ASSESSMENT_CAPABILITIES = ['infrastructure', 'web_application', 'embedded'];
+export const ASSESSMENT_EXECUTION_MODES = ['autonomous', 'dry_run', 'semi_auto', 'guided'];
+export const ASSESSMENT_RISK_CLASSIFICATIONS = ['passive', 'safe_active', 'intrusive', 'prohibited'];
+
 // Reasoning / thinking effort options for a scan's model.
 // This is the union accepted by the supported provider/harness combinations.
 // The model catalog narrows it to the values exposed by a particular model.

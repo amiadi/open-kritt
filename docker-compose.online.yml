@@ -1,0 +1,29 @@
+# Online deployment override. The application network remains private while the
+# engine may use Docker's normal egress for approved source and model access.
+services:
+  frontend:
+    networks:
+      - app-internal
+  backend:
+    environment:
+      OPEN_KRITT_DEPLOYMENT_MODE: online
+    networks:
+      - app-internal
+  engine:
+    environment:
+      OPEN_KRITT_DEPLOYMENT_MODE: online
+    networks:
+      - app-internal
+      - assessment-egress
+  executor-view:
+    networks:
+      - app-internal
+  db:
+    networks:
+      - app-internal
+
+networks:
+  app-internal:
+    internal: true
+  assessment-egress:
+    driver: bridge

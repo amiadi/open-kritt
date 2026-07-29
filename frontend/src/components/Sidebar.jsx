@@ -134,6 +134,7 @@ export default function Sidebar() {
         <NavItem label="Overview" to="/" active={isActive('/', true)} />
         <NavItem label="Workflows" to="/workflows" active={isActive('/workflows')} />
         <NavItem label="Scans" to="/scans" active={isActive('/scans')} />
+        <NavItem label="Assessments" to="/assessments" active={isActive('/assessments')} />
       </div>
 
       <div className="mono sidebar-group-label" style={{ ...GROUP_LABEL, padding: '16px 8px 6px' }}>

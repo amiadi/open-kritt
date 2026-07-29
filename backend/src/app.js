@@ -18,6 +18,9 @@ import modelProvidersRouter from './routes/modelProviders.js';
 import generationsRouter from './routes/generations.js';
 import accountsRouter from './routes/accounts.js';
 import settingsRouter from './routes/settings.js';
+import assessmentsRouter from './routes/assessments.js';
+import offlineBundlesRouter from './routes/offlineBundles.js';
+import { createAirgapRouter } from './routes/airgap.js';
 import { ValidationError } from './lib/validation.js';
 
 export function prismaUniqueConflict(error) {
@@ -63,9 +66,39 @@ export function corsOptions(env = process.env) {
   };
 }
 
+function isAirgapDeployment(env) {
+  return env.OPEN_KRITT_DEPLOYMENT_MODE?.trim().toLowerCase() === 'airgap';
+}
+
+function airgapProviderGuard(env) {
+  const blockedPrefixes = ['/api/accounts', '/api/model-providers', '/api/model-catalog', '/api/generations'];
+  return (req, res, next) => {
+    if (!isAirgapDeployment(env)) return next();
+    if (blockedPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`))) {
+      return res.status(409).json({
+        error:
+          'Cloud model-provider operations are disabled in air-gap mode. Import and configure a local provider bundle first.',
+      });
+    }
+    if (req.path === '/api/scans' && req.method === 'POST') {
+      return res.status(409).json({
+        error: 'Scan launches are disabled in air-gap mode until a local model provider is configured.',
+      });
+    }
+    next();
+  };
+}
+
 export function createApp({ env = process.env } = {}) {
   const app = express();
 
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    next();
+  });
   app.use(cors(corsOptions(env)));
   app.use(express.json({ limit: '2mb' }));
   app.use(
@@ -82,6 +115,10 @@ export function createApp({ env = process.env } = {}) {
 
   app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'open-kritt-backend' }));
 
+  // This belt-and-suspenders guard remains effective even when a service is
+  // accidentally started outside the intended Compose network override.
+  app.use(airgapProviderGuard(env));
+
   app.use('/api/overview', overviewRouter);
   app.use('/api/workflows', workflowsRouter);
   app.use('/api/steps', stepsRouter);
@@ -96,6 +133,9 @@ export function createApp({ env = process.env } = {}) {
   app.use('/api/generations', generationsRouter);
   app.use('/api/accounts', accountsRouter);
   app.use('/api/settings', settingsRouter);
+  app.use('/api/assessments', assessmentsRouter);
+  app.use('/api/offline-bundles', offlineBundlesRouter);
+  app.use('/api/airgap', createAirgapRouter({ env }));
 
   // 404 for unknown API routes.
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));

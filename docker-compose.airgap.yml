@@ -1,0 +1,51 @@
+# Air-gapped deployment override. Every service is explicitly attached only to
+# an internal Docker network, so containers cannot reach external networks.
+# Import all images, model artifacts, and tool packs before starting this stack.
+services:
+  frontend:
+    networks:
+      - airgap-internal
+  backend:
+    environment:
+      OPEN_KRITT_DEPLOYMENT_MODE: airgap
+      ENGINE_CODEX_AUTO_UPDATE: 'false'
+      OPEN_KRITT_CODEX_API_KEY_CONFIGURED: ''
+      OPEN_KRITT_OPENAI_API_KEY_CONFIGURED: ''
+      OPEN_KRITT_ANTHROPIC_API_KEY_CONFIGURED: ''
+      OPEN_KRITT_OPENROUTER_API_KEY_CONFIGURED: ''
+      OPEN_KRITT_CODEX_LOGIN_CONFIGURED: ''
+      # An optional OpenAI-compatible or existing Ollama server attached to
+      # airgap-internal. Ollama defaults to http://ollama:11434 when its
+      # provider value is selected.
+      # The URL and model identifier are configuration only; this phase does
+      # not yet enable scan execution against the local provider.
+      OPEN_KRITT_LOCAL_MODEL_ENDPOINT: ${OPEN_KRITT_LOCAL_MODEL_ENDPOINT:-}
+      OPEN_KRITT_LOCAL_MODEL_ID: ${OPEN_KRITT_LOCAL_MODEL_ID:-}
+      OPEN_KRITT_LOCAL_MODEL_PROVIDER: ${OPEN_KRITT_LOCAL_MODEL_PROVIDER:-openai_compatible}
+    networks:
+      - airgap-internal
+  engine:
+    environment:
+      OPEN_KRITT_DEPLOYMENT_MODE: airgap
+      ENGINE_CODEX_AUTO_UPDATE: 'false'
+      ENGINE_MODEL_CATALOG_REFRESH_SECONDS: '0'
+      CODEX_API_KEY: ''
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      OPENROUTER_API_KEY: ''
+      GITHUB_TOKEN: ''
+      OPEN_KRITT_LOCAL_MODEL_ENDPOINT: ${OPEN_KRITT_LOCAL_MODEL_ENDPOINT:-}
+      OPEN_KRITT_LOCAL_MODEL_ID: ${OPEN_KRITT_LOCAL_MODEL_ID:-}
+      OPEN_KRITT_LOCAL_MODEL_PROVIDER: ${OPEN_KRITT_LOCAL_MODEL_PROVIDER:-openai_compatible}
+    networks:
+      - airgap-internal
+  executor-view:
+    networks:
+      - airgap-internal
+  db:
+    networks:
+      - airgap-internal
+
+networks:
+  airgap-internal:
+    internal: true

@@ -25,8 +25,8 @@ function restoreEnv(previous) {
   }
 }
 
-async function requestApp(path, options) {
-  const server = createApp().listen(0, '127.0.0.1');
+async function requestApp(path, options, env) {
+  const server = createApp({ env }).listen(0, '127.0.0.1');
   await once(server, 'listening');
   const { port } = server.address();
 
@@ -100,4 +100,17 @@ test('model provider API exposes configured IDs and rejects unavailable scan pro
     error: 'Validation failed.',
     errors: [{ field: 'model_provider', message: 'The selected model provider is not configured.' }],
   });
+});
+
+test('air-gap mode blocks cloud provider, generation, and scan-launch APIs', async () => {
+  const env = { OPEN_KRITT_DEPLOYMENT_MODE: 'airgap' };
+  for (const path of ['/api/accounts', '/api/model-providers', '/api/model-catalog', '/api/generations']) {
+    const result = await requestApp(path, { method: 'GET' }, env);
+    assert.equal(result.status, 409);
+    assert.match(result.body.error, /disabled in air-gap mode/);
+  }
+
+  const scan = await requestApp('/api/scans', { method: 'POST' }, env);
+  assert.equal(scan.status, 409);
+  assert.match(scan.body.error, /Scan launches are disabled/);
 });

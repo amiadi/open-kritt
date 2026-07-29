@@ -78,12 +78,57 @@ async function request(path, options = {}) {
   return data;
 }
 
+async function download(path, filename) {
+  const res = await fetch(`${BASE}/api${path}`);
+  if (!res.ok) {
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+      /* no JSON error body */
+    }
+    throw new ApiError(data?.error || `Download failed (${res.status})`, res.status, data?.errors);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   // overview
   overview: () => request('/overview'),
   // non-secret engine runtime settings
   settings: () => request('/settings'),
   updateSettings: (body) => request('/settings', { method: 'PATCH', body }),
+  // air-gap deployment and local model readiness
+  airgapStatus: (probe = false) => request(`/airgap/status${probe ? '?probe=1' : ''}`),
+  // authorized assessment control plane
+  assessmentDeploymentProfile: () => request('/assessments/deployment-profile'),
+  assessmentEngagements: () => request('/assessments/engagements'),
+  createAssessmentEngagement: (body) => request('/assessments/engagements', { method: 'POST', body }),
+  assessmentScopes: (engagementId) => request(`/assessments/engagements/${engagementId}/scopes`),
+  createAssessmentScope: (engagementId, body) =>
+    request(`/assessments/engagements/${engagementId}/scopes`, { method: 'POST', body }),
+  assessmentAuthorizations: (engagementId) => request(`/assessments/engagements/${engagementId}/authorizations`),
+  createAssessmentAuthorization: (engagementId, body) =>
+    request(`/assessments/engagements/${engagementId}/authorizations`, { method: 'POST', body }),
+  assessmentRuns: () => request('/assessments/runs'),
+  createAssessmentRun: (body) => request('/assessments/runs', { method: 'POST', body }),
+  planAssessmentRun: (id) => request(`/assessments/runs/${id}/plan`, { method: 'POST' }),
+  assessmentActions: (id) => request(`/assessments/runs/${id}/actions`),
+  assessmentAuditEvents: (id) => request(`/assessments/runs/${id}/audit-events`),
+  decideAssessmentAction: (id, body) => request(`/assessments/actions/${id}`, { method: 'PATCH', body }),
+  createAssessmentReportSnapshot: (id) => request(`/assessments/runs/${id}/report-snapshot`, { method: 'POST' }),
+  downloadAssessmentActionsCsv: (id) =>
+    download(`/assessments/runs/${id}/reports/actions.csv`, `assessment-${id}-actions.csv`),
+  downloadAssessmentAuditCsv: (id) =>
+    download(`/assessments/runs/${id}/reports/audit-events.csv`, `assessment-${id}-audit-events.csv`),
+  downloadAssessmentReport: (id, format) =>
+    download(`/assessments/runs/${id}/reports/${format}`, `assessment-${id}-report.${format}`),
   // workflows
   workflows: () => request('/workflows'),
   workflow: (id) => request(`/workflows/${id}`),

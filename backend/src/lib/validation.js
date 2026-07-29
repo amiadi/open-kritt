@@ -36,6 +36,9 @@ import {
   extractExtraKeys,
   multiOutputDepthKey,
   isMultiOutputDepthKey,
+  DEPLOYMENT_MODES,
+  ASSESSMENT_CAPABILITIES,
+  ASSESSMENT_EXECUTION_MODES,
 } from './constants.js';
 
 class ValidationError extends Error {
@@ -47,6 +50,159 @@ class ValidationError extends Error {
   }
 }
 export { ValidationError };
+
+function requiredText(value, field, errors, { maxLength = 500 } = {}) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) errors.push({ field, message: 'This field is required.' });
+  else if (text.length > maxLength) errors.push({ field, message: `Must be ${maxLength} characters or fewer.` });
+  return text;
+}
+
+function assessmentOptionalText(value, field, errors, { maxLength = 4_000 } = {}) {
+  if (value == null) return null;
+  if (typeof value !== 'string') {
+    errors.push({ field, message: 'Must be a string.' });
+    return null;
+  }
+  const text = value.trim();
+  if (text.length > maxLength) errors.push({ field, message: `Must be ${maxLength} characters or fewer.` });
+  return text || null;
+}
+
+function jsonArray(value, field, errors) {
+  if (!Array.isArray(value)) {
+    errors.push({ field, message: 'Must be an array.' });
+    return [];
+  }
+  if (value.length > 10_000) errors.push({ field, message: 'May contain at most 10,000 items.' });
+  return value;
+}
+
+export function validateDeploymentProfile(body) {
+  const mode = typeof body?.mode === 'string' ? body.mode.trim() : '';
+  if (!DEPLOYMENT_MODES.includes(mode)) {
+    throw new ValidationError([{ field: 'mode', message: `Mode must be one of: ${DEPLOYMENT_MODES.join(', ')}.` }]);
+  }
+  return { mode };
+}
+
+export function validateEngagement(body) {
+  const errors = [];
+  const name = requiredText(body?.name, 'name', errors);
+  const owner = requiredText(body?.owner, 'owner', errors);
+  const description = assessmentOptionalText(body?.description, 'description', errors);
+  const classification =
+    assessmentOptionalText(body?.classification, 'classification', errors, { maxLength: 100 }) || 'confidential';
+  if (errors.length) throw new ValidationError(errors);
+  return { name, owner, description, classification };
+}
+
+export function validateTargetScope(body) {
+  const errors = [];
+  const name = requiredText(body?.name, 'name', errors);
+  const targets = jsonArray(body?.targets, 'targets', errors);
+  const exclusions = body?.exclusions == null ? [] : jsonArray(body.exclusions, 'exclusions', errors);
+  if (targets.length === 0) errors.push({ field: 'targets', message: 'At least one authorized target is required.' });
+  if (errors.length) throw new ValidationError(errors);
+  return { name, targets, exclusions };
+}
+
+export function validateAuthorizationRecord(body) {
+  const errors = [];
+  const approvedBy = requiredText(body?.approved_by ?? body?.approvedBy, 'approved_by', errors);
+  const authorizationReference = requiredText(
+    body?.authorization_reference ?? body?.authorizationReference,
+    'authorization_reference',
+    errors
+  );
+  const evidenceReference = assessmentOptionalText(
+    body?.evidence_reference ?? body?.evidenceReference,
+    'evidence_reference',
+    errors
+  );
+  const validFrom = new Date(body?.valid_from ?? body?.validFrom);
+  const validUntil = new Date(body?.valid_until ?? body?.validUntil);
+  if (Number.isNaN(validFrom.getTime()))
+    errors.push({ field: 'valid_from', message: 'Must be a valid ISO 8601 timestamp.' });
+  if (Number.isNaN(validUntil.getTime()))
+    errors.push({ field: 'valid_until', message: 'Must be a valid ISO 8601 timestamp.' });
+  if (!Number.isNaN(validFrom.getTime()) && !Number.isNaN(validUntil.getTime()) && validUntil <= validFrom) {
+    errors.push({ field: 'valid_until', message: 'Must be after valid_from.' });
+  }
+  if (errors.length) throw new ValidationError(errors);
+  return { approvedBy, authorizationReference, evidenceReference, validFrom, validUntil };
+}
+
+export function validateAssessmentRun(body) {
+  const errors = [];
+  const capability = typeof body?.capability === 'string' ? body.capability.trim() : '';
+  const executionMode =
+    typeof (body?.execution_mode ?? body?.executionMode) === 'string'
+      ? (body.execution_mode ?? body.executionMode).trim()
+      : '';
+  if (!ASSESSMENT_CAPABILITIES.includes(capability)) {
+    errors.push({ field: 'capability', message: `Must be one of: ${ASSESSMENT_CAPABILITIES.join(', ')}.` });
+  }
+  if (!ASSESSMENT_EXECUTION_MODES.includes(executionMode)) {
+    errors.push({ field: 'execution_mode', message: `Must be one of: ${ASSESSMENT_EXECUTION_MODES.join(', ')}.` });
+  }
+  const policySnapshot = body?.policy_snapshot ?? body?.policySnapshot ?? {};
+  if (!isObjectMap(policySnapshot)) errors.push({ field: 'policy_snapshot', message: 'Must be an object.' });
+  const activeTesting = policySnapshot?.active_testing;
+  if (activeTesting !== undefined) {
+    if (!isObjectMap(activeTesting)) {
+      errors.push({ field: 'policy_snapshot.active_testing', message: 'Must be an object.' });
+    } else if (activeTesting.allowed === true) {
+      requiredText(activeTesting.approved_by, 'policy_snapshot.active_testing.approved_by', errors);
+      requiredText(activeTesting.approval_reference, 'policy_snapshot.active_testing.approval_reference', errors);
+    } else if (activeTesting.allowed !== false) {
+      errors.push({ field: 'policy_snapshot.active_testing.allowed', message: 'Must be true or false.' });
+    }
+  }
+  if (errors.length) throw new ValidationError(errors);
+  return { capability, executionMode, policySnapshot };
+}
+
+export function validateAssessmentActionDecision(body) {
+  const errors = [];
+  const status = typeof body?.status === 'string' ? body.status.trim() : '';
+  const actor = requiredText(body?.actor, 'actor', errors, { maxLength: 500 });
+  if (!['approved', 'denied'].includes(status)) {
+    errors.push({ field: 'status', message: 'Status must be approved or denied.' });
+  }
+  if (errors.length) throw new ValidationError(errors);
+  return { status, actor };
+}
+
+export function validateOfflineBundleImport(body) {
+  const errors = [];
+  const manifest = body?.manifest;
+  const manifestDigest = requiredText(body?.manifest_digest ?? body?.manifestDigest, 'manifest_digest', errors, {
+    maxLength: 64,
+  });
+  const actor = requiredText(body?.actor, 'actor', errors);
+  const verificationMode =
+    typeof (body?.verification_mode ?? body?.verificationMode) === 'string'
+      ? (body.verification_mode ?? body.verificationMode).trim()
+      : '';
+  if (!/^[a-f0-9]{64}$/.test(manifestDigest))
+    errors.push({ field: 'manifest_digest', message: 'Must be a SHA-256 digest.' });
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    errors.push({ field: 'manifest', message: 'Must be a manifest object.' });
+  } else {
+    if (!Number.isInteger(manifest.schemaVersion))
+      errors.push({ field: 'manifest.schemaVersion', message: 'Must be an integer.' });
+    if (!Array.isArray(manifest.images)) errors.push({ field: 'manifest.images', message: 'Must be an array.' });
+    if (!Array.isArray(manifest.artifacts)) errors.push({ field: 'manifest.artifacts', message: 'Must be an array.' });
+    if (Number.isNaN(new Date(manifest.createdAt).getTime()))
+      errors.push({ field: 'manifest.createdAt', message: 'Must be an ISO timestamp.' });
+  }
+  if (!['digest', 'signed'].includes(verificationMode)) {
+    errors.push({ field: 'verification_mode', message: 'Must be digest or signed.' });
+  }
+  if (errors.length) throw new ValidationError(errors);
+  return { manifestDigest, actor, verificationMode, manifest };
+}
 
 function modelSelectionValidation(body, fieldPrefix = '') {
   const errors = [];

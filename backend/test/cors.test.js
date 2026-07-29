@@ -40,3 +40,11 @@ test('CORS wildcard requires an explicit operator opt-in', async () => {
   const response = await requestHealth({ BACKEND_CORS_ORIGINS: '*' }, 'https://app.example');
   assert.equal(response.headers.get('access-control-allow-origin'), '*');
 });
+
+test('API responses include baseline browser hardening headers', async () => {
+  const response = await requestHealth({}, null);
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin');
+});

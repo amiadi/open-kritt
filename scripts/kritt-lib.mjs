@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
+import { runOfflineBundleCli } from './offline-bundle.mjs';
+import { runAirgapVerifyCli } from './verify-airgap.mjs';
 
 export const PROVIDER_KEYS = ['CODEX_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENROUTER_API_KEY'];
 export const CODEX_LOGIN_STATUS_KEY = 'CODEX_LOGIN_CONFIGURED';
@@ -1245,6 +1247,8 @@ const HELP = {
 Usage:
   ./kritt setup              Configure model access and optional GitHub access
   ./kritt start              Start the Docker Compose stack
+  ./kritt bundle <command>   Export, verify, or import an offline image bundle
+  ./kritt airgap verify      Verify the resolved air-gap network policy
   ./kritt help [subcommand]  Show command help
 
 Run ./kritt setup first. It creates .env when needed and never prints credential values.`,
@@ -1266,6 +1270,21 @@ Checks that .env and at least one model provider credential or Codex login are c
   docker compose up --build
 
 The process stays attached to Compose; press Ctrl+C to stop the stack.`,
+  bundle: `Usage: ./kritt bundle <export|import> [options]
+
+Creates and verifies Docker-only offline image bundles for air-gapped deployments.
+
+Examples:
+  ./kritt bundle export --output ./open-kritt-bundle --images open-kritt-engine:local
+  ./kritt bundle export --output ./open-kritt-bundle --compose-airgap
+  ./kritt bundle import --input ./open-kritt-bundle --verify-only
+
+Add --private-key during export and --public-key --require-signature during import to require an Ed25519-signed manifest. Every bundle artifact is SHA-256 verified before Docker loads images.`,
+  airgap: `Usage: ./kritt airgap verify
+
+Resolves the air-gap Docker Compose profile and verifies that every service is
+attached only to the internal airgap-internal network. It also checks that the
+backend and engine enforce airgap mode and automatic engine updates are disabled.`,
 };
 
 export function showHelp(command, io = defaultIo()) {
@@ -1288,6 +1307,14 @@ export async function runCli(argv, options = {}) {
       return args.includes('--help') || args.includes('-h') ? showHelp('setup', io) : runSetup({ ...options, io });
     if (command === 'start')
       return args.includes('--help') || args.includes('-h') ? showHelp('start', io) : runStart({ ...options, io });
+    if (command === 'bundle')
+      return args.includes('--help') || args.includes('-h')
+        ? showHelp('bundle', io)
+        : runOfflineBundleCli(args, { output: io.output, rootDir: options.rootDir });
+    if (command === 'airgap')
+      return args.includes('--help') || args.includes('-h')
+        ? showHelp('airgap', io)
+        : runAirgapVerifyCli(args, { rootDir: options.rootDir, output: io.output });
     writeError(io, `Unknown command: ${command}`);
     return showHelp(undefined, io) || 1;
   } catch (error) {
