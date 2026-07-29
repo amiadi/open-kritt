@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/Kritt-ai/open-kritt/compare/v1.2.0...v1.3.0) (2026-07-29)
+
+
+### Features
+
+* ENGINE_IGNORE_LOW_STORAGE advance settings for users who don't care about filling the host disk ([9c117e8](https://github.com/Kritt-ai/open-kritt/commit/9c117e87b70b235081976b3fb514ea6fb928b77b))
+* **frontend:** add community links ([d973ab8](https://github.com/Kritt-ai/open-kritt/commit/d973ab87d16a004df5f4e1dd382b7673851739fa))
+* harden scan runtime and account handling ([d6aea21](https://github.com/Kritt-ai/open-kritt/commit/d6aea212fd041e2b9bf654c56366355d8be54ab3))
+* harden scan runtime and account handling ([39091e2](https://github.com/Kritt-ai/open-kritt/commit/39091e2929eb077a92ef3cf27ab151b6e8ec1c24))
+* scale provider accounts and scan processing ([266a969](https://github.com/Kritt-ai/open-kritt/commit/266a969eef0221075b4a182ddc2f7006eeed7509))
+* scale provider accounts and scan processing ([7828800](https://github.com/Kritt-ai/open-kritt/commit/7828800079323309b15a6f734093ca9da258d300))
+
 ## [1.2.0](https://github.com/Kritt-ai/open-kritt/compare/v1.1.0...v1.2.0) (2026-07-23)
 
 
